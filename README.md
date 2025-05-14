@@ -1,6 +1,6 @@
 # Comp_neuro_final
 
-## format
+```
 Comp_neuro_final/
 ├── README.md               # 프로젝트 개요·설치·실행 방법  
 ├── requirements.txt        # 파이썬 패키지 리스트  
@@ -42,8 +42,9 @@ Comp_neuro_final/
 ├── results/                # 실험 결과 산출물  
 │   ├── logs/               # TensorBoard 로그 등    
 │   ├── checkpoints/        # 모델 체크포인트    
-│   └── figures/            # 학습曲線·히스토그램·Heatmap    
+│   └── figures/            # 학습곡선·히스토그램·Heatmap    
 │
 └── scripts/                # 편의용 실행 스크립트  
     ├── run_all.sh          # 일괄 학습/테스트    
     └── env_setup.sh        # 가상환경·데이터 다운로드  
+```
