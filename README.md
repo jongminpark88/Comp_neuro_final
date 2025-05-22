@@ -2,11 +2,11 @@
 
 ```
 Comp_neuro_final/
-├── README.md               # 프로젝트 개요·설치·실행 방법  
-├── requirements.txt        # 파이썬 패키지 리스트  
+├── README.md               # 프로젝트 개요·설치·실행 방법 
 │
 ├── envs/                   # 커스텀 환경 모듈  
-│   └── custom_maze_env.py  # 환경 정의  
+│   └── custom_maze_env.py  # 환경 정의
+│   └── get_retina_image.py  # 환경 정의  
 │
 ├── src/                    # 핵심 모델 코드  
 │   ├── memory/             
@@ -28,16 +28,15 @@ Comp_neuro_final/
 ├── experiments/            # 실험 스크립트 & 설정  
 │   ├── configs/            
 │   │   ├── default.yaml    # 기본 하이퍼파라미터    
-│   │   └── debug.yaml      # 디버깅용 소규모 설정    
 │   │
 │   ├── train.py            # 학습 실행 엔트리포인트  
 │   ├── test.py             # 테스트/평가 스크립트  
 │   └── analyze.py          # 결과 수집·시각화 자동화    
 │
 ├── notebooks/              # 탐색·분석용 Jupyter 노트북  
-│   ├── 01_data_inspection.ipynb  
-│   ├── 02_gate_behavior.ipynb  
-│   └── 03_performance_comparison.ipynb  
+│   ├── visualize_map.ipynb  
+│   ├── env_test.ipynb  
+│   └── performance_comparison.ipynb  
 │
 ├── results/                # 실험 결과 산출물  
 │   ├── logs/               # TensorBoard 로그 등    
