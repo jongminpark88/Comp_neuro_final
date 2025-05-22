@@ -6,7 +6,7 @@ Comp_neuro_final/
 │
 ├── envs/                   # 커스텀 환경 모듈  
 │   └── custom_maze_env.py  # 환경 정의
-│   └── get_retina_image.py  # 환경 정의  
+│   └── get_retina_image.py # 시각 이미지 랜더링
 │
 ├── src/                    # 핵심 모델 코드  
 │   ├── memory/             
