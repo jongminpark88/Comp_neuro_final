@@ -51,7 +51,7 @@ def main():
     # 2) 환경 생성 & 래핑
     base_env = CustomMazeEnv(**cfg["env"])
     env = RGBImgPartialObsWrapper(base_env, tile_size=cfg["env"]["tile_size"])
-    obs_dim = np.prod(env.observation_space["image"].shape)  # flatten -> 6ox80
+    obs_dim = np.prod(reconstruct(obs["image"], render_chanel=1).shape)  # flatten -> 6ox80
     action_dim = env.action_space.n
 
     # 3) 에이전트, 옵티마이저
@@ -94,7 +94,7 @@ def main():
             rewards.append(r)
 
             #======================================
-            ##### 메모리에 저장하는 코드 추가 ###
+            ##### 메모리에 저장하는 코드 추가해야함 ###
             # retina : retina(egocentric view)
             # action : a
             # hidden_state
