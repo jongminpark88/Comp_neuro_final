@@ -181,13 +181,13 @@ class CustomMazeEnv(MiniGridEnv):
     def step(self, action):
         obs_raw, reward, terminated, truncated, info = super().step(action)
 
+        reward = reward - 0.01
+
         # goal 도달 시 보상/종료
         if tuple(self.agent_pos) == self.goal_pos:
-            reward     = 1.0
+            reward = reward + 100
             terminated = True
-        else:
-            reward     = 0.0
-
+            
         obs = {
             "view":     obs_raw,
             "timestep": self.step_count,
