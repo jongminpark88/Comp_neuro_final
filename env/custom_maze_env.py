@@ -80,6 +80,21 @@ LAYOUTS = {
         [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0],
         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     ]),
+    "d": np.array([
+        [1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,1,1,1,1,0,1,1,1,0,1,1,1],
+        [0,0,0,0,0,0,1,0,0,0,0,0,1],
+        [1,1,1,0,0,0,1,0,1,1,0,1,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,0,1,1,1,0,0,1,1,1,1,0,1],
+        [1,0,1,0,0,0,0,0,0,0,1,0,1],
+        [1,0,1,0,1,1,1,1,1,0,1,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,1],
+        [1,0,1,1,1,0,1,0,1,1,1,0,1],
+        [1,0,0,0,1,0,0,0,1,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ])
 }
 
 class CustomMazeEnv(MiniGridEnv):
@@ -180,14 +195,15 @@ class CustomMazeEnv(MiniGridEnv):
 
     def step(self, action):
         obs_raw, reward, terminated, truncated, info = super().step(action)
+        
+        # 매 타입스텝마다 패널티 추가
+        reward = reward - 0.01
 
         # goal 도달 시 보상/종료
         if tuple(self.agent_pos) == self.goal_pos:
-            reward     = 1.0
+            reward = reward + 100
             terminated = True
-        else:
-            reward     = 0.0
-
+            
         obs = {
             "view":     obs_raw,
             "timestep": self.step_count,
