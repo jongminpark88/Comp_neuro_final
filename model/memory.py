@@ -78,7 +78,7 @@ class memory_bank():
             # trace_random = torch.take_along_dim(trace, random_idx, dim=0)
             # _, bottomk_random_idx = torch.topk(trace_random, k=self.update_freq, largest=False, dim=0)
             # bottomk_idx = torch.take_along_dim(random_idx, bottomk_random_idx, dim=0)
-            bottomk_idx = gen_topk_random(trace, k=self.update_freq, dim=0, largest=False)
+            bottomk_idx = gen_topk_random(self.trace, k=self.update_freq, dim=0, largest=False)
             
             ## memory_bank_org에서 삭제 (5010 > 5000)
             for each_idx in bottomk_idx: 
@@ -86,7 +86,7 @@ class memory_bank():
                 del self.memory_bank_org[each_id]
 
             ## ids, trace에서 삭제 (5010 > 5000)
-            mask = torch.ones(trace.size(0), dtype=torch.bool)
+            mask = torch.ones(self.trace.size(0), dtype=torch.bool)
             mask[bottomk_idx] = False
 
             self.memory_ids = self.memory_ids[mask]
@@ -123,7 +123,7 @@ class memory_gate(nn.Module):
     def __init__(
             self, 
             hidden_dim_lyrs: list=[128, 64],
-            action_dim: int=4,
+            action_dim: int=7,
             attn_size: int=5,
             rl_algo_arg: str='default'
         ):
@@ -133,6 +133,7 @@ class memory_gate(nn.Module):
         ### 0) ATTENTION WEIGHTS 
         self.hidden_dim = hidden_dim_lyrs[0]
         self.attn_size = attn_size
+        self.action_dim = action_dim
         self.Q = torch.nn.Parameter(torch.randn(self.hidden_dim,  self.hidden_dim) / math.sqrt(self.hidden_dim)) ## 128 x 128
         self.K = torch.nn.Parameter(torch.randn(self.hidden_dim,  self.hidden_dim) / math.sqrt(self.hidden_dim)) ## 128 x 128
         self.V = torch.nn.Parameter(torch.randn(self.hidden_dim,  self.hidden_dim) / math.sqrt(self.hidden_dim)) ## 128 x 128
@@ -163,6 +164,7 @@ class memory_gate(nn.Module):
 
         self.lin_lyrs_actor += [nn.ReLU(), nn.Linear(lin_lyr_prev, action_dim)]
         self.lin_actor = nn.Sequential(*self.lin_lyrs_actor)
+
         if rl_algo_arg == 'A2C':
             self.lin_lyrs_critic += [nn.ReLU(), nn.Linear(lin_lyr_prev, 1)]
             self.lin_critic = nn.Sequential(*self.lin_lyrs_critic)
@@ -209,7 +211,7 @@ class memory_gate(nn.Module):
             #action_probs = self.softmax_lyr(logits) ## 4
 
         else: 
-            logits = torch.randn(4)
+            logits = torch.randn(self.action_dim)
             value = torch.empty(0)
             Wattn_topk_val = torch.empty(1,1,5)
             chosen_memory_ids = torch.empty(0)
