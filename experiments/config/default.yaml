@@ -15,6 +15,7 @@ train:
   log_interval: 50
   save_interval: 100
   checkpoint_dir: "../results/checkpoints"
+  actor_loss_coef: 0.5
 
 agent:
   hidden_size: 128
@@ -24,3 +25,8 @@ agent:
 logging:
   tensorboard_dir: "../results/logs"
   use_tensorboard: true
+  attention_dir: "../results/attention"
+  timestep_dir: "../results/timestep"
+  gate_alpha_dir: "../results/gate_alpha"
+  terminated_dir: "../results/terminated"
+  attention_weight_dir: "../results/attention_weight"
