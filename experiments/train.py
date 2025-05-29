@@ -203,6 +203,10 @@ def main(RL_ALGO_ARG):
 
     # 3) 에이전트, 옵티마이저
     # hyperparameter
+    eps_start = cfg["agent"]["eps_start"]
+    eps_decay = cfg["agent"]["eps_decay"]
+    eps = eps_start
+
     HIDDEN_SIZE = HIDDEN_SIZE = cfg["agent"]["hidden_size"]
     PARAMS = {
         'memory_bank_ep': {
@@ -226,7 +230,7 @@ def main(RL_ALGO_ARG):
         },
         'memory_gate': {
             'hidden_dim_lyrs': [HIDDEN_SIZE, int(HIDDEN_SIZE/2)],
-            'action_dim': 4,
+            'action_dim': action_dim,
             'attn_size': 5,
             'rl_algo_arg': RL_ALGO_ARG
         }
@@ -247,7 +251,7 @@ def main(RL_ALGO_ARG):
 
     # 4) 학습 루프
     policy.train()
-    for ep in range(1, 5):
+    for ep in range(1, cfg['train']['total_episodes']):
         
         obs, _ = env.reset(seed=cfg["train"]["seed"] + ep)
         # obs["image"] shape = (tile_size * view_size, tile_size * view_size, 3)
@@ -265,7 +269,10 @@ def main(RL_ALGO_ARG):
         while not done:
             logits, value, sx, hx, chosen_ids, gate_alpha_, attention_ = policy(state, hx, memory_bank_ep)
             m = Categorical(logits=logits)
-            a = m.sample()
+            if random.random() < eps:
+                a = torch.randint(action_dim, (1,))
+            else:
+                a = m.sample()
             log_probs.append(m.log_prob(a))
             values.append(value)
             obs, r, term, trunc, _ = env.step(a.item())
@@ -323,6 +330,7 @@ def main(RL_ALGO_ARG):
         optimizer.zero_grad()
         loss.backward(retain_graph=True)
         optimizer.step()
+        eps *= eps_decay
 
         #============================
         # 로그

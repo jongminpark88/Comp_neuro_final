@@ -21,6 +21,8 @@ agent:
   hidden_size: 128
   learning_rate: 1e-3
   gamma: 0.99
+  eps_start: 1.00
+  eps_decay: 0.95
 
 logging:
   tensorboard_dir: "../results/logs"
