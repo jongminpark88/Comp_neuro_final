@@ -296,7 +296,7 @@ def main(RL_ALGO_ARG):
                             os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}', f'attention_weight_{RL_ALGO_ARG}_{timestep_}.pt'))
 
             ### for checking
-            print(chosen_ids, gate_alpha_, r)
+            #print(chosen_ids, gate_alpha_, r)
 
         #============================
         # 에피소드 당 손실 계산 (REINFORCE)
