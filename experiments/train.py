@@ -279,7 +279,7 @@ def main(RL_ALGO_ARG):
             rewards.append(r)
 
             memory_bank_ep.update(retina, sx.detach().clone(), hx.detach().clone(), a, r, obs, ep, chosen_ids)
-            memory_bank_ep.save(cfg["logging"]["timestep_dir"], cfg["logging"]["attention_dir"], ep, obs['timestep'], chosen_ids)
+            memory_bank_ep.save(cfg["logging"]["timestep_dir"], cfg["logging"]["attention_dir"], ep, obs['timestep'], chosen_ids, RL_ALGO_ARG)
             
             # next state
             retina = reconstruct(obs["image"], render_chanel=1)# 60 x 80
@@ -293,7 +293,7 @@ def main(RL_ALGO_ARG):
                 timestep_ = obs['timestep']
                 os.makedirs(os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}'), exist_ok=True)
                 torch.save(attention_,
-                            os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}', f'attention_weight_{timestep_}.pt'))
+                            os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}', f'attention_weight_{RL_ALGO_ARG}_{timestep_}.pt'))
 
             ### for checking
             print(chosen_ids, gate_alpha_, r)
@@ -349,13 +349,13 @@ def main(RL_ALGO_ARG):
             time_now = dt.now().strftime("%Y-%m-%d-%H:%M")
             os.makedirs(cfg["train"]["checkpoint_dir"], exist_ok=True)
             torch.save(policy.state_dict(),
-                        os.path.join(cfg["train"]["checkpoint_dir"], f"policy_ep{ep}_{time_now}.pt"))
+                        os.path.join(cfg["train"]["checkpoint_dir"], f"policy_{RL_ALGO_ARG}_ep{ep}_{time_now}.pt"))
         
         os.makedirs(cfg["logging"]["gate_alpha_dir"], exist_ok=True)
         os.makedirs(cfg["logging"]["terminated_dir"], exist_ok=True)
-        with open(os.path.join(cfg["logging"]["gate_alpha_dir"], f"gate_alpha_ep{ep}.pkl"), "wb") as file_gate_alpha:
+        with open(os.path.join(cfg["logging"]["gate_alpha_dir"], f"gate_alpha_{RL_ALGO_ARG}_ep{ep}.pkl"), "wb") as file_gate_alpha:
             pickle.dump(gate_alpha_lst, file_gate_alpha)
-        with open(os.path.join(cfg["logging"]["terminated_dir"], f"terminated_ep{ep}.pkl"), "wb") as file_terminated:
+        with open(os.path.join(cfg["logging"]["terminated_dir"], f"terminated_{RL_ALGO_ARG}_ep{ep}.pkl"), "wb") as file_terminated:
             pickle.dump(terminated_lst, file_terminated)
 
         if tb:

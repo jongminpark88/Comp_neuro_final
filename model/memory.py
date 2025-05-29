@@ -104,15 +104,15 @@ class memory_bank():
         hidden_state_decay = hidden_state + torch.normal(0, self.noise_std, size=hidden_state.shape)*decay_prod
         return hidden_state_decay
 
-    def save(self, timestep_basedir, attention_base_dir, ep, timestep, chosen_ids):
+    def save(self, timestep_basedir, attention_base_dir, ep, timestep, chosen_ids, which_algo):
         os.makedirs(os.path.join(timestep_basedir, f'ep{ep}'), exist_ok=True)
         os.makedirs(os.path.join(attention_base_dir, f'ep{ep}'), exist_ok=True)
         timestep_memory = {self.memory_id : self.memory_slot}
         attn_memory = {chosen.item(): self.memory_bank_org[chosen.item()] for chosen in chosen_ids}
         
-        with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{timestep}.pkl'), 'wb') as file1:
+        with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{which_algo}_{timestep}.pkl'), 'wb') as file1:
             pickle.dump(timestep_memory, file1)
-        with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{timestep}.pkl'),'wb') as file2:
+        with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{which_algo}_{timestep}.pkl'),'wb') as file2:
             pickle.dump(attn_memory, file2)
 
 class memory_gate(nn.Module):
