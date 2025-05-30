@@ -191,7 +191,7 @@ def main(RL_ALGO_ARG):
 
     # 2) 환경 생성 & 래핑
     #base_env = CustomMazeEnv(**cfg["env"]) ##TBD - ERROR
-    base_env = CustomMazeEnv(**{'layout_id': 'c',
+    base_env = CustomMazeEnv(**{'layout_id': 'e',
     'goal_pos': [0, 3],
     'view_size': 5,
     'max_steps': 1000,
@@ -245,7 +245,9 @@ def main(RL_ALGO_ARG):
     # tensorboard 준비
     if cfg["logging"]["use_tensorboard"]:
         from torch.utils.tensorboard import SummaryWriter
-        tb = SummaryWriter(cfg["logging"]["tensorboard_dir"])
+        log_dir = os.path.join(cfg["logging"]["tensorboard_dir"], f'{RL_ALGO_ARG}')
+        os.makedirs(log_dir, exist_ok=True)
+        tb = SummaryWriter(log_dir)
     else:
         tb = None
 
@@ -270,7 +272,7 @@ def main(RL_ALGO_ARG):
             logits, value, sx, hx, chosen_ids, gate_alpha_, attention_ = policy(state, hx, memory_bank_ep)
             m = Categorical(logits=logits)
             if random.random() < eps:
-                a = torch.randint(action_dim, (1,))
+                a = torch.randint(action_dim, ())
             else:
                 a = m.sample()
             log_probs.append(m.log_prob(a))
@@ -343,7 +345,7 @@ def main(RL_ALGO_ARG):
             tb.add_scalar("train/loss", loss.item(), ep)
 
         if ep % cfg["train"]["log_interval"] == 0:
-            print(f"[Episode {ep}] reward={ep_reward:.2f}, loss={loss.item():.4f}")
+            print(f"[Episode {ep}] reward={ep_reward:.2f}, loss={loss.item():.4f}m algo={RL_ALGO_ARG}")
 
         if ep % cfg["train"]["save_interval"] == 0:
             time_now = dt.now().strftime("%Y-%m-%d-%H:%M")

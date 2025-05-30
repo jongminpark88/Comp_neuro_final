@@ -94,7 +94,20 @@ LAYOUTS = {
         [1,0,1,1,1,0,1,0,1,1,1,0,1],
         [1,0,0,0,1,0,0,0,1,0,0,0,1],
         [1,1,1,1,1,1,1,1,1,1,1,1,1],
-    ])
+    ]),
+    "e": np.array([
+        [1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,1,0,0,0,1],
+        [1,0,0,1,1,0,1,0,1],
+        [0,0,0,0,0,0,1,0,1],
+        [1,1,1,0,1,1,0,0,1],
+        [1,0,0,0,0,0,0,0,1],
+        [1,0,1,0,1,1,1,0,1],
+        [1,0,0,0,1,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1],
+    ]),
+
+
 }
 
 class CustomMazeEnv(MiniGridEnv):
@@ -106,7 +119,7 @@ class CustomMazeEnv(MiniGridEnv):
 
     def __init__(
         self,
-        layout_id: str = "c",
+        layout_id: str = "e",
         goal_pos=(0, 3),
         view_size: int = 5,
         max_steps: int = 1000,
@@ -126,7 +139,7 @@ class CustomMazeEnv(MiniGridEnv):
         self.safe_starts = [
             (int(x), int(y))
             for y, x in zip(ys, xs)
-            if (y, x) != self.goal_pos
+            if (int(x), int(y)) != self.goal_pos 
         ]
 
         # train_mode에 따라 90% vs 10% 분할
@@ -195,15 +208,15 @@ class CustomMazeEnv(MiniGridEnv):
 
     def step(self, action):
         obs_raw, reward, terminated, truncated, info = super().step(action)
-        
-        # 매 타입스텝마다 패널티 추가
+
+        # 매 타임스텝 기본 페널티
         reward = reward - 0.01
 
-        # goal 도달 시 보상/종료
+        # goal 도달 시 추가 보상 및 종료
         if tuple(self.agent_pos) == self.goal_pos:
             reward = reward + 100
             terminated = True
-            
+
         obs = {
             "view":     obs_raw,
             "timestep": self.step_count,
