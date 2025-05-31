@@ -27,10 +27,12 @@ class memory_bank():
         self.memory_ids = torch.empty(0, dtype=torch.int)
         self.trace = torch.empty(0)
 
-    def update(self, retina, embed_state, hidden_state, action, reward, obs, ep, chosen_ids):
+    def update(self, retina, embed_state, hidden_state, action, reward, obs, ep, chosen_ids,
+    timestep_basedir, attention_base_dir, RL_ALGO_ARG):
 
         ## 1) push & truncate
         self.push(retina, embed_state, hidden_state, action, reward, obs, ep) ## push (5/28 확인완료)
+        self.save(timestep_basedir, attention_base_dir, ep, timestep, chosen_ids, RL_ALGO_ARG)
         self.update_trace(chosen_ids) ## update trace (5/28 확인완료)
         self.trunc() ## truncate (5/28 확인완료)
 
@@ -109,16 +111,19 @@ class memory_bank():
         hidden_state_decay = hidden_state + torch.normal(0, self.noise_std, size=hidden_state.shape)*decay_prod
         return hidden_state_decay
 
-    def save(self, timestep_basedir, attention_base_dir, ep, timestep, chosen_ids):
-        os.makedirs(os.path.join(timestep_basedir, f'ep{ep}'), exist_ok=True)
-        os.makedirs(os.path.join(attention_base_dir, f'ep{ep}'), exist_ok=True)
-        timestep_memory = {self.memory_id : self.memory_slot}
-        attn_memory = {chosen.item(): self.memory_bank_org[chosen.item()] for chosen in chosen_ids}
-        
-        with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{timestep}.pkl'), 'wb') as file1:
-            pickle.dump(timestep_memory, file1)
-        with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{timestep}.pkl'),'wb') as file2:
-            pickle.dump(attn_memory, file2)
+    def save(self, timestep_basedir, attention_base_dir, ep, timestep, chosen_ids, RL_ALGO_ARG):
+        pass
+        ### TBD 6/1
+        # if timestep % self.update_freq == 0:
+        #     os.makedirs(os.path.join(timestep_basedir, f'ep{ep}'), exist_ok=True)
+        #     os.makedirs(os.path.join(attention_base_dir, f'ep{ep}'), exist_ok=True)
+        #     timestep_memory = {self.memory_id : self.memory_slot}
+        #     attn_memory = {chosen.item(): self.memory_bank_org[chosen.item()] for chosen in chosen_ids}
+            
+        #     with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{RL_ALGO_ARG}_{timestep}.pkl'), 'wb') as file1:
+        #         pickle.dump(timestep_memory, file1)
+        #     with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{RL_ALGO_ARG}_{timestep}.pkl'),'wb') as file2:
+        #         pickle.dump(attn_memory, file2)
 
 class memory_gate(nn.Module):
     """
