@@ -280,8 +280,9 @@ def main(RL_ALGO_ARG):
             obs, r, term, trunc, _ = env.step(a.item())
             rewards.append(r)
 
-            memory_bank_ep.update(retina, sx.detach().clone(), hx.detach().clone(), a, r, obs, ep, chosen_ids)
-            memory_bank_ep.save(cfg["logging"]["timestep_dir"], cfg["logging"]["attention_dir"], ep, obs['timestep'], chosen_ids, RL_ALGO_ARG)
+            memory_bank_ep.update(retina, sx.detach().clone(), hx.detach().clone(), a, r, obs, ep, chosen_ids.
+            cfg["logging"]["timestep_dir"],  cfg["logging"]["attention_dir"], RL_ALGO_ARG) #update = update + save
+            #memory_bank_ep.save(cfg["logging"]["timestep_dir"], cfg["logging"]["attention_dir"], ep, obs['timestep'], chosen_ids, RL_ALGO_ARG)
             
             # next state
             retina = reconstruct(obs["image"], render_chanel=1)# 60 x 80
@@ -293,9 +294,11 @@ def main(RL_ALGO_ARG):
                 gate_alpha_lst.append(gate_alpha_.item())
                 terminated_lst.append(term)
                 timestep_ = obs['timestep']
-                os.makedirs(os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}'), exist_ok=True)
-                torch.save(attention_,
-                            os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}', f'attention_weight_{RL_ALGO_ARG}_{timestep_}.pt'))
+
+                ### TBD 6/1
+                # os.makedirs(os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}'), exist_ok=True) 
+                # torch.save(attention_,
+                #             os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}', f'attention_weight_{RL_ALGO_ARG}_{timestep_}.pt'))
 
             ### for checking
             #print(chosen_ids, gate_alpha_, r)
