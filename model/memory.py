@@ -32,7 +32,7 @@ class memory_bank():
 
         ## 1) push & truncate
         self.push(retina, embed_state, hidden_state, action, reward, obs, ep) ## push (5/28 확인완료)
-        self.save(timestep_basedir, attention_base_dir, ep, timestep, chosen_ids, RL_ALGO_ARG)
+        self.save(timestep_basedir, attention_base_dir, ep, obs['timestep'], chosen_ids, RL_ALGO_ARG)
         self.update_trace(chosen_ids) ## update trace (5/28 확인완료)
         self.trunc() ## truncate (5/28 확인완료)
 
