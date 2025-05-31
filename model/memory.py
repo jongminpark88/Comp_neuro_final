@@ -82,8 +82,13 @@ class memory_bank():
             
             ## memory_bank_org에서 삭제 (5010 > 5000)
             for each_idx in bottomk_idx: 
-                each_id = self.memory_ids[each_idx]
-                del self.memory_bank_org[each_id]
+                raw_id = self.memory_ids[each_idx]
+                # each_id = self.memory_ids[each_idx]
+                #del self.memory_bank_org[each_id]
+                key = int(raw_id)
+                del self.memory_bank_org[key]
+
+                
 
             ## ids, trace에서 삭제 (5010 > 5000)
             mask = torch.ones(self.trace.size(0), dtype=torch.bool)
@@ -104,15 +109,15 @@ class memory_bank():
         hidden_state_decay = hidden_state + torch.normal(0, self.noise_std, size=hidden_state.shape)*decay_prod
         return hidden_state_decay
 
-    def save(self, timestep_basedir, attention_base_dir, ep, timestep, chosen_ids, which_algo):
+    def save(self, timestep_basedir, attention_base_dir, ep, timestep, chosen_ids):
         os.makedirs(os.path.join(timestep_basedir, f'ep{ep}'), exist_ok=True)
         os.makedirs(os.path.join(attention_base_dir, f'ep{ep}'), exist_ok=True)
         timestep_memory = {self.memory_id : self.memory_slot}
         attn_memory = {chosen.item(): self.memory_bank_org[chosen.item()] for chosen in chosen_ids}
         
-        with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{which_algo}_{timestep}.pkl'), 'wb') as file1:
+        with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{timestep}.pkl'), 'wb') as file1:
             pickle.dump(timestep_memory, file1)
-        with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{which_algo}_{timestep}.pkl'),'wb') as file2:
+        with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{timestep}.pkl'),'wb') as file2:
             pickle.dump(attn_memory, file2)
 
 class memory_gate(nn.Module):
@@ -137,7 +142,9 @@ class memory_gate(nn.Module):
         self.Q = torch.nn.Parameter(torch.randn(self.hidden_dim,  self.hidden_dim) / math.sqrt(self.hidden_dim)) ## 128 x 128
         self.K = torch.nn.Parameter(torch.randn(self.hidden_dim,  self.hidden_dim) / math.sqrt(self.hidden_dim)) ## 128 x 128
         self.V = torch.nn.Parameter(torch.randn(self.hidden_dim,  self.hidden_dim) / math.sqrt(self.hidden_dim)) ## 128 x 128
-        self.gate_alpha = torch.nn.Parameter(torch.zeros(1))
+        # self.gate_alpha = torch.nn.Parameter(torch.zeros(1))
+        self.gate_logit = nn.Parameter(torch.tensor(-2.0))
+        self.norm = nn.LayerNorm(self.hidden_dim)
         # self.F = torch.nn.Parameter(torch.randn(hidden_dim,  hidden_dim) / math.sqrt(hidden_dim))
 
         ### 1) LINEAR LAYERS
@@ -199,7 +206,11 @@ class memory_gate(nn.Module):
             # if memory_bank_len > memory_bank_hidden.size(1):
             #     new_memory = torch.cat([hidden_state, chosen_action_feature]) ## 1 x 1 x 128
             # else:
-            new_memory_hidden = (1-self.gate_alpha)*hidden_state + self.gate_alpha*chosen_attn ## 1 x 1 x 128
+
+            
+            # new_memory_hidden = (1-self.gate_alpha)*hidden_state + self.gate_alpha*chosen_attn ## 1 x 1 x 128
+            alpha = torch.sigmoid(self.gate_logit)            # α ∈ (0,1)
+            new_memory_hidden = (1 - alpha) * self.norm(hidden_state) + alpha * self.norm(chosen_attn)
             new_memory = torch.cat([torch.squeeze(new_memory_hidden), chosen_action_feature, chosen_reward_feature]) #128 + 5 + 5 
 
             logits = self.lin_actor(new_memory) ## 4
