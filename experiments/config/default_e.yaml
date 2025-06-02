@@ -1,0 +1,32 @@
+# 기본 하이퍼파라미터 설정
+env:
+  layout_id: "e"
+  goal_pos: [0, 3]
+  view_size: 5
+  max_steps: 1000
+  tile_size: 32
+  render_mode: "rgb_array"
+
+train:
+  seed: 42
+  total_episodes: 1000
+  log_interval: 50
+  save_interval: 100
+  checkpoint_dir: "../results_e/checkpoints"
+  actor_loss_coef: 0.5
+
+agent:
+  hidden_size: 128
+  learning_rate: 1e-3
+  gamma: 0.99
+  eps_start: 1.00
+  eps_decay: 0.95
+
+logging:
+  tensorboard_dir: "../results_e/logs"
+  use_tensorboard: true
+  attention_dir: "../results_e/attention"
+  timestep_dir: "../results_e/timestep"
+  gate_alpha_dir: "../results_e/gate_alpha"
+  terminated_dir: "../results_e/terminated"
+  attention_weight_dir: "../results_e/attention_weight"

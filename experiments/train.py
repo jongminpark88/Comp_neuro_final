@@ -393,10 +393,16 @@ from torch import nn, optim
 from torch.distributions import Categorical
 from minigrid.wrappers import RGBImgPartialObsWrapper
 
+# MOD
+import_root = os.path.abspath(os.path.join(os.getcwd()))
+if import_root not in sys.path:
+    sys.path.insert(0, import_root)
+print(import_root)
+
 from env.custom_maze_env import CustomMazeEnv
 from env.get_retina_image import reconstruct
 from model.policy import cnnrnnattn_policy, memory_bank
-
+from model.utils import get_least_used_gpu
 torch.autograd.set_detect_anomaly(True)
 
 #==========================
@@ -414,22 +420,29 @@ def set_seed(seed: int):
 WARMUP_EPS  = 30   # warm‑up 에피소드 수
 ALPHA_CONST = 0.2  # warm‑up 동안 고정 α 값
 # ───────────────────────────
+# # GPU # ★MOD
+# if torch.cuda.device_count() > 0:
+#     DEVICE = get_least_used_gpu(torch.cuda.device_count())
+# else: 
+#     DEVICE = 'cpu'
+# ───────────────────────────
 
-def main(RL_ALGO_ARG: str):
+def main(RL_ALGO_ARG: str, CONFIG_NM: str): # ★MOD
     """train entrypoint"""
     # 1) 설정 불러오기
-    project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-    cfg_path = os.path.join(project_root, 'experiments/config/default.yaml')
+    # project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
+    cfg_path = os.path.join(os.getcwd(), f'experiments/config/{CONFIG_NM}.yaml')
     cfg = yaml.safe_load(open(cfg_path))
     set_seed(cfg['train']['seed'])
 
     # 2) 환경 생성 & 래핑 (임시 하드코딩; 실제 사용 시 cfg['env'] 사용)
-    base_env = CustomMazeEnv(layout_id='e', goal_pos=[0, 3], view_size=5,
-                              max_steps=1000, tile_size=32, render_mode='rgb_array')
+    # base_env = CustomMazeEnv(layout_id='e', goal_pos=[0, 3], view_size=5,
+    #                           max_steps=1000, tile_size=32, render_mode='rgb_array')
+    base_env = CustomMazeEnv(**cfg['env']) # ★MOD
     env = RGBImgPartialObsWrapper(base_env, tile_size=cfg['env']['tile_size'])
     action_dim = env.action_space.n
 
-    # 3) 에이전트, 옵티마이저
+    # 3) 에이전트, 옵티마이저, GPU
     eps_start, eps_decay = cfg['agent']['eps_start'], cfg['agent']['eps_decay']
     eps = eps_start
     HIDDEN_SIZE = cfg['agent']['hidden_size']
@@ -490,7 +503,7 @@ def main(RL_ALGO_ARG: str):
 
         done = False
         while not done:
-            logits, value, sx, hx, chosen_ids, gate_alpha_, _ = policy(state, hx, memory_bank_ep)
+            logits, value, sx, hx, chosen_ids, gate_alpha_, attention_ = policy(state, hx, memory_bank_ep)
             m = Categorical(logits=logits)
             a = torch.randint(action_dim, ()) if random.random() < eps else m.sample()
             log_probs.append(m.log_prob(a))
@@ -498,7 +511,7 @@ def main(RL_ALGO_ARG: str):
             obs, r, term, trunc, _ = env.step(a.item())
             rewards.append(r)
 
-            memory_bank_ep.update(retina, sx.detach(), hx.detach(), a, r, obs, ep, chosen_ids,
+            memory_bank_ep.update(retina, sx.detach().cpu(), hx.detach().cpu(), a, r, obs, ep, chosen_ids.cpu(),
                                    cfg['logging']['timestep_dir'], cfg['logging']['attention_dir'], RL_ALGO_ARG)
 
             retina = reconstruct(obs['image'], render_chanel=1)
@@ -509,7 +522,13 @@ def main(RL_ALGO_ARG: str):
                 hx = hx.detach()
                 gate_alpha_log.append(gate_alpha_.item())
                 term_log.append(term)
-                print('ep:', ep, 'step:', obs['timestep'], chosen_ids, gate_alpha_, r)
+                # ★MOD
+                timestep_ = obs['timestep']
+                if timestep_ % 50 == 0: ## 일단 하드코딩
+                    os.makedirs(os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}'), exist_ok=True) 
+                    torch.save(attention_,
+                                os.path.join(cfg["logging"]["attention_weight_dir"], f'ep{ep}', f'attention_weight_{RL_ALGO_ARG}_{timestep_}.pt'))
+                    print('ep:', ep, 'step:', obs['timestep'], chosen_ids, gate_alpha_, r)
 
         # ---------- 손실 계산 ----------
         k = PARAMS['memory_gate']['attn_size']
@@ -573,4 +592,5 @@ def main(RL_ALGO_ARG: str):
 # =====================================================================
 if __name__ == '__main__':
     RL_ALGO_ARG = sys.argv[1] if len(sys.argv) > 1 else 'A2C'
-    main(RL_ALGO_ARG)
+    CONFIG_NM = sys.argv[2] if len(sys.argv) > 2 else 'default_e' # ★MOD
+    main(RL_ALGO_ARG, CONFIG_NM)

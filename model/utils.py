@@ -15,10 +15,10 @@ def get_least_used_gpu(num_gpus):
     for i in range(num_gpus):
         handle = pynvml.nvmlDeviceGetHandleByIndex(i)
         info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        used_memory = info.used  # GPU memory used in bytes
+        used_memory = info.used
 
         if used_memory < min_memory:
             min_memory = used_memory
-            best_gpu = i  # Assign to least used GPU
+            best_gpu = i
 
     return best_gpu

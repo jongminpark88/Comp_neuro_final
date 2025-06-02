@@ -257,7 +257,7 @@ class memory_bank():
         memory_len: int   = 5000,
         update_freq: int  = 100,
         hidden_dim: int   = 128,
-        decay_yn: bool    = False
+        decay_yn: bool    = False,
     ):
         self.decay_rate   = decay_rate
         self.noise_std    = noise_std
@@ -343,8 +343,23 @@ class memory_bank():
         noise = torch.normal(0, self.noise_std, size=hidden_state.shape)
         return hidden_state + noise * prod
 
-    def save(self, *args, **kwargs):
-        pass   # (로그 저장 기능 필요 시 활성화)
+    def save(self, timestep_basedir, attention_base_dir, ep, 
+             timestep, chosen_ids, RL_ALGO_ARG):
+        # pass   # (로그 저장 기능 필요 시 활성화)
+
+        # ★MOD
+        if timestep % 50 == 0: ## 일단 하드코딩
+            os.makedirs(os.path.join(timestep_basedir, f'ep{ep}'), exist_ok=True)
+            os.makedirs(os.path.join(attention_base_dir, f'ep{ep}'), exist_ok=True)
+            
+            timestep_memory = {self.memory_id : self.memory_bank_org[self.memory_id]}
+            attn_memory = {chosen.item(): self.memory_bank_org[chosen.item()] for chosen in chosen_ids}
+            
+            with open(os.path.join(timestep_basedir, f'ep{ep}', f'timestep_memory_{RL_ALGO_ARG}_{timestep}.pkl'), 'wb') as file1:
+                pickle.dump(timestep_memory, file1)
+
+            with open(os.path.join(attention_base_dir, f'ep{ep}', f'attention_memory_{RL_ALGO_ARG}_{timestep}.pkl'),'wb') as file2:
+                pickle.dump(attn_memory, file2)
 
 
 # =========================================================
@@ -398,6 +413,7 @@ class memory_gate(nn.Module):
             lin_prev = h
         actor_layers += [nn.ReLU(), nn.Linear(lin_prev, action_dim)]
         self.lin_actor = nn.Sequential(*actor_layers)
+        
         if rl_algo_arg == 'A2C':
             critic_layers += [nn.ReLU(), nn.Linear(lin_prev, 1)]
             self.lin_critic = nn.Sequential(*critic_layers)

@@ -9,6 +9,7 @@ class cnnrnnattn_policy(nn.Module):
     model : CNN → RNN → ATTENTION
     output: logits, value, state_emd, hidden_emd, chosen_ids, α, full-W
     '''
+    # ★MOD: GPU
     def __init__(self, params):
         super().__init__()
         self.cnn_embed_lyr   = cnn_embed(**params['cnn_embed'])
