@@ -1,5 +1,6 @@
 from model.utils import * 
 
+'''
 class memory_bank():
     def __init__(
             self,
@@ -233,4 +234,257 @@ class memory_gate(nn.Module):
             chosen_memory_ids = torch.empty(0)
             Wattn = torch.empty(1,1,5)
 
-        return logits, value, torch.squeeze(Wattn_topk_val).detach().clone(), chosen_memory_ids, self.gate_alpha.detach().clone(), torch.squeeze(Wattn).detach().clone()
+        return logits, value, torch.squeeze(Wattn_topk_val).detach().clone(), chosen_memory_ids, alpha, torch.squeeze(Wattn).detach().clone()
+    
+    '''
+# memory.py  — “CNN-embed로 유사도를 계산” + α-warm-up 호환
+# 기존 구조와 변수·주석은 그대로 두고, 수정한 줄에는 모두 “# ★MOD” 표시
+
+from model.utils import *
+import math, os, pickle
+import torch
+from torch import nn
+
+# =========================================================
+# Memory Bank
+# =========================================================
+class memory_bank():
+    def __init__(
+        self,
+        decay_rate: float = 0.0001,
+        noise_std: float  = 0.001,
+        et_lambda: float  = 0.99,
+        memory_len: int   = 5000,
+        update_freq: int  = 100,
+        hidden_dim: int   = 128,
+        decay_yn: bool    = False
+    ):
+        self.decay_rate   = decay_rate
+        self.noise_std    = noise_std
+        self.et_lambda    = et_lambda
+        self.update_freq  = update_freq
+        self.memory_len   = memory_len
+        self.decay_yn     = decay_yn
+
+        # ── 내부 상태 초기화 ───────────────────────────────
+        self.memory_id       = 0
+        self.memory_bank_org = {}
+        self.hidden_memory   = torch.empty(1, 1, hidden_dim)
+        self.embed_memory    = torch.empty(1, 1, hidden_dim)    # ★MOD: CNN-embed 캐시용 텐서 추가
+        self.action_memory   = torch.empty(0, dtype=torch.int)
+        self.reward_memory   = torch.empty(0)
+        self.memory_ids      = torch.empty(0, dtype=torch.int)
+        self.trace           = torch.empty(0)
+
+    # ---------- update / push / trunc / trace ----------------
+    def update(self, retina, embed_state, hidden_state, action, reward,
+               obs, ep, chosen_ids, timestep_basedir, attention_base_dir,
+               RL_ALGO_ARG):
+        self.push(retina, embed_state, hidden_state, action, reward, obs, ep)
+        self.save(timestep_basedir, attention_base_dir, ep,
+                  obs['timestep'], chosen_ids, RL_ALGO_ARG)
+        self.update_trace(chosen_ids)
+        self.trunc()
+
+        # ── slots → tensor 캐시 갱신 ───────────────────────
+        self.hidden_memory = torch.cat(
+            [elm[3] for elm in self.memory_bank_org.values()], dim=1
+        )
+        self.embed_memory  = torch.cat(
+            [elm[1] for elm in self.memory_bank_org.values()], dim=1
+        )                                                        # ★MOD
+        self.action_memory = torch.tensor(
+            [elm[4] for elm in self.memory_bank_org.values()],
+            dtype=torch.int
+        )
+        self.reward_memory = torch.tensor(
+            [elm[5] for elm in self.memory_bank_org.values()]
+        )
+
+    def push(self, retina, embed_state, hidden_state, action, reward, obs, ep):
+        hid_decay = self.add_decay(hidden_state) if self.decay_yn else hidden_state
+        self.memory_id += 1
+        self.memory_ids = torch.cat([
+            self.memory_ids,
+            torch.tensor([self.memory_id], dtype=torch.int)
+        ])
+        self.memory_bank_org[self.memory_id] = [
+            retina,
+            embed_state.detach().clone(),       # (CNN-embed 캐시)
+            hidden_state.detach().clone(),
+            hid_decay.detach().clone(),
+            action,
+            reward,
+            obs['timestep'],
+            obs['position'],
+            ep
+        ]
+
+    def trunc(self):
+        if self.memory_id > self.memory_len and self.memory_id % self.update_freq == 0:
+            bottom_idx = gen_topk_random(self.trace, k=self.update_freq, dim=0, largest=False)
+            # delete from dict
+            for idx in bottom_idx:
+                del self.memory_bank_org[int(self.memory_ids[idx])]
+            # delete from tensors
+            mask = torch.ones(self.trace.size(0), dtype=torch.bool)
+            mask[bottom_idx] = False
+            self.memory_ids = self.memory_ids[mask]
+            self.trace      = self.trace[mask]
+
+    def update_trace(self, chosen_ids):
+        self.trace *= self.et_lambda
+        self.trace  = torch.cat([self.trace, torch.tensor([1])])
+        if chosen_ids.nelement() != 0:
+            self.trace += torch.isin(self.memory_ids, chosen_ids).to(dtype=torch.int)
+
+    def add_decay(self, hidden_state):
+        prod  = math.exp(self.decay_rate * self.memory_id)
+        noise = torch.normal(0, self.noise_std, size=hidden_state.shape)
+        return hidden_state + noise * prod
+
+    def save(self, *args, **kwargs):
+        pass   # (로그 저장 기능 필요 시 활성화)
+
+
+# =========================================================
+# Memory Gate
+# =========================================================
+class memory_gate(nn.Module):
+    """
+    (1) query_state  = 현재 obs embedding  → Q (embed-based)
+    (2) hidden_state = RNN hidden           → gate MLP · 출력 결합
+    Soft-Attention(훈련) / Top-k(평가), τ=2
+    """
+    def __init__(
+        self,
+        hidden_dim_lyrs: list = [128, 64],
+        action_dim: int       = 7,
+        attn_size: int        = 5,
+        rl_algo_arg: str      = 'default'
+    ):
+        super().__init__()
+
+        # ───── config ─────
+        self.hidden_dim = hidden_dim_lyrs[0]
+        self.attn_size  = attn_size
+        self.action_dim = action_dim
+
+        # ───── Q·K·V 파라미터 ─────
+        self.Q = nn.Parameter(torch.randn(self.hidden_dim, self.hidden_dim) /
+                              math.sqrt(self.hidden_dim))
+        self.K = nn.Parameter(torch.randn(self.hidden_dim, self.hidden_dim) /
+                              math.sqrt(self.hidden_dim))
+        self.V = nn.Parameter(torch.randn(self.hidden_dim, self.hidden_dim) /
+                              math.sqrt(self.hidden_dim))
+
+        # ───── per-timestep gate MLP ─────
+        # (hidden_dim*2 → 32 → 1)  : hidden_state + attn 벡터를 concat해서 입력
+        self.gate_mlp = nn.Sequential(
+            nn.Linear(self.hidden_dim * 4, 64),  # ★MOD
+            nn.ReLU(),
+            nn.Linear(64, 1)
+        )
+        self.norm = nn.LayerNorm(self.hidden_dim)
+
+        # ───── actor / critic heads ─────
+        self.rl_algo_arg = rl_algo_arg
+        lin_prev = hidden_dim_lyrs[0] + 2 * attn_size
+        actor_layers, critic_layers = [], []
+        for h in hidden_dim_lyrs[1:]:
+            actor_layers  += [nn.ReLU(), nn.Linear(lin_prev, h)]
+            if rl_algo_arg == 'A2C':
+                critic_layers += [nn.ReLU(), nn.Linear(lin_prev, h)]
+            lin_prev = h
+        actor_layers += [nn.ReLU(), nn.Linear(lin_prev, action_dim)]
+        self.lin_actor = nn.Sequential(*actor_layers)
+        if rl_algo_arg == 'A2C':
+            critic_layers += [nn.ReLU(), nn.Linear(lin_prev, 1)]
+            self.lin_critic = nn.Sequential(*critic_layers)
+
+        # ───── temperature ─────
+        self.tau = 2.0
+
+    # -----------------------------------------------------
+    def forward(self, query_state, hidden_state,
+                embed_memory, hidden_memory,
+                action_memory, reward_memory, memory_ids):
+        value = torch.empty(0)
+
+        if hidden_memory.size(1) >= self.attn_size:
+            # ───── scaled dot-product attn (τ 적용) ─────
+            # ★MOD: K는 embed_memory, V는 hidden_memory
+            Q      = query_state @ self.Q
+            K      = (embed_memory   @ self.K).squeeze(0)
+            V      =  hidden_memory @ self.V
+            scores = (Q @ K.T) / (self.tau * math.sqrt(self.hidden_dim))
+            noise = torch.randn_like(scores) * 1e-3      # σ=0.001 정도
+            scores_noisy = scores + noise
+            #W      = nn.Softmax(dim=2)(scores)
+            W      = nn.Softmax(dim=2)(scores_noisy)
+
+            # ───── train vs eval에 따른 attn, top_idx, W_top 계산 ─────
+            if self.training:
+                attn    = W @ V
+                top_idx = gen_topk_random(W, self.attn_size, dim=2, largest=True).squeeze()
+                W_top   = W
+            else:
+                top_idx = gen_topk_random(W, self.attn_size, dim=2, largest=True).squeeze()
+                W_top   = W[:, :, top_idx]
+                V_top   = V[:, top_idx, :]
+                attn    = W_top @ V_top
+
+            chosen_ids  = torch.stack([memory_ids[i] for i in top_idx])
+            act_feat    = action_memory[top_idx]
+            rew_feat    = reward_memory[top_idx]
+
+            # ─── Gate fusion (hidden_state + attn concat) ───
+            # ★MOD: hidden_state와 attn을 1D 벡터로 만들어 concat
+            h_flat    = hidden_state.view(-1)   # (hidden_dim,)
+            attn_flat = attn.view(-1)           # (hidden_dim,)
+
+
+            #print("hidden_dim:", self.hidden_dim)
+            #print("h_flat:", h_flat.shape)
+
+            #for check 
+            '''
+            with torch.no_grad():
+                cos_sim = torch.dot(h_flat, attn_flat) / (h_flat.norm() * attn_flat.norm() + 1e-8)
+                l2_dist = torch.norm(h_flat - attn_flat)
+                print(f"[gate debug] cos_sim={cos_sim.item():.4f}, l2={l2_dist.item():.4f}")
+            '''
+
+            concat_v  = torch.cat([h_flat, attn_flat, h_flat-attn_flat, h_flat*attn_flat], dim=0)  # (2*hidden_dim,)
+            alpha     = torch.sigmoid(self.gate_mlp(concat_v)) # ★MOD
+
+            new_h = (1 - alpha) * self.norm(hidden_state) + alpha * self.norm(attn)
+
+            # ─── actor / critic heads ───
+            feat   = torch.cat([new_h.view(-1),
+                                act_feat.view(-1),
+                                rew_feat.view(-1)], dim=0)
+            logits = self.lin_actor(feat)
+            if self.rl_algo_arg == 'A2C':
+                value = self.lin_critic(feat).squeeze()
+
+        else:  # 메모리 부족 시
+            logits     = torch.randn(self.action_dim)
+            value      = torch.empty(0)
+            W_top      = torch.empty(1, 1, self.attn_size)
+            chosen_ids = torch.empty(0, dtype=torch.long)
+            # ★MOD: attn이 없을 때는 hidden_state와 “0”으로 된 attn_flat을 concat
+            h_flat    = hidden_state.view(-1)
+            attn_flat = torch.zeros_like(h_flat)
+            concat_v  = torch.cat([h_flat, attn_flat, h_flat-attn_flat, h_flat*attn_flat], dim=0)
+            # concat_v  = torch.cat([h_flat, attn_flat], dim=0)     # (2*hidden_dim,)
+            alpha     = torch.sigmoid(self.gate_mlp(concat_v))   # ★MOD
+            scores    = W_top
+
+        # 반환: (logits, value, Top-k weights, chosen_ids, α, full scores)
+        return (logits,
+                value,
+                W_top.detach(),
+                chosen_ids,
+                alpha.squeeze(),
+                scores.detach().squeeze())
